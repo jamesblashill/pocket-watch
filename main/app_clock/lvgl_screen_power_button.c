@@ -8,6 +8,9 @@
 #include "esp_lv_adapter.h"
 #include "esp_sleep.h"
 #include "driver/gpio.h"
+#include "esp_lcd_panel_ops.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #define TAG   "screen_power_btn"
 
@@ -57,11 +60,19 @@ void screen_power_set_on(bool on)
     if (on) {
         gpio_wakeup_disable(BSP_LCD_TOUCH_INT);
         esp_lv_adapter_resume();
+        /* DISPON needs a moment to settle before the next flush reaches the
+         * panel, or the first frame back can show a brief glitch. */
+        esp_lcd_panel_disp_on_off(bsp_display_get_panel_handle(), true);
+        vTaskDelay(pdMS_TO_TICKS(20));
         bsp_display_brightness_set(s_saved_brightness);
         lv_display_trigger_activity(NULL);
     } else {
         s_saved_brightness = bsp_display_brightness_get();
         bsp_display_backlight_off();
+        /* ST77916 driver has no SLPIN/SLPOUT support, so DISPOFF is the best
+         * available low-power step short of patching the panel driver (see
+         * BATTERY_OPTIMIZATIONS.md #3). */
+        esp_lcd_panel_disp_on_off(bsp_display_get_panel_handle(), false);
         /* Stops the LVGL worker task from doing any further render/compositing
          * work while nothing is visible. Safe to call from the worker task's
          * own context (e.g. the idle_check_timer_cb below) - the adapter

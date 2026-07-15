@@ -908,6 +908,11 @@ err:
     return ret;
 }
 
+esp_lcd_panel_handle_t bsp_display_get_panel_handle(void)
+{
+    return panel_handle;
+}
+
 esp_err_t bsp_touch_new(const bsp_display_cfg_t *cfg, esp_lcd_touch_handle_t *ret_touch)
 {
     assert(cfg != NULL);

@@ -76,6 +76,13 @@ typedef struct {
 esp_err_t bsp_display_new(const bsp_display_config_t *config, esp_lcd_panel_handle_t *ret_panel, esp_lcd_panel_io_handle_t *ret_io);
 
 /**
+ * @brief Get the LCD panel handle created by bsp_display_new()/bsp_display_start()
+ *
+ * @return Panel handle, or NULL if the display has not been initialized yet
+ */
+esp_lcd_panel_handle_t bsp_display_get_panel_handle(void);
+
+/**
  * @brief Turn on display backlight
  *
  * Backlight is controlled with IO expander TCA9554.
