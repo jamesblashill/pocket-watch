@@ -1,0 +1,22 @@
+# ESP-IDF build output
+build/
+build_*/
+
+# ESP-IDF component manager (restored from dependencies.lock)
+managed_components/
+.component_hash
+
+# ESP-IDF / CMake cache
+sdkconfig.old
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles/
+
+# VS Code local state
+.vscode/*.local.json
+
+# OS cruft
+.DS_Store
+
+# Local secrets
+main/app_net/wifi_credentials.h

@@ -1,0 +1,7 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.pythonInstallPath": "/usr/bin/python3",
+  "idf.currentSetup": "/Users/james/.espressif/v5.5.4/esp-idf",
+  "idf.flashType": "UART",
+  "idf.port": "/dev/tty.usbmodem101"
+}
