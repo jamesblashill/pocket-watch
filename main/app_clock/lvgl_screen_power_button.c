@@ -6,6 +6,8 @@
 #include "esp_log.h"
 #include "esp_pm.h"
 #include "esp_lv_adapter.h"
+#include "esp_sleep.h"
+#include "driver/gpio.h"
 
 #define TAG   "screen_power_btn"
 
@@ -53,6 +55,7 @@ void screen_power_set_on(bool on)
     }
 
     if (on) {
+        gpio_wakeup_disable(BSP_LCD_TOUCH_INT);
         esp_lv_adapter_resume();
         bsp_display_brightness_set(s_saved_brightness);
         lv_display_trigger_activity(NULL);
@@ -67,6 +70,17 @@ void screen_power_set_on(bool on)
         if (err != ESP_OK) {
             ESP_LOGW(TAG, "esp_lv_adapter_pause failed: %s", esp_err_to_name(err));
         }
+        /* The touch driver never registers a GPIO ISR on this pin (LVGL polls
+         * get_xy() instead - see esp_lcd_touch_register_interrupt_callback,
+         * never called from bsp_touch_new), so it's safe to repurpose its
+         * interrupt config for wake here; gpio_wakeup_enable() overwrites the
+         * pin's interrupt type as a side effect. The power button doesn't
+         * need the same treatment - iot_button's own enable_power_save
+         * handling (screen_power_button_init below) arms/disarms its GPIO
+         * wakeup automatically. Without this, light sleep (now unbounded per
+         * the tick-timer fix above) would have no touch-driven wake source. */
+        ESP_ERROR_CHECK(gpio_wakeup_enable(BSP_LCD_TOUCH_INT, GPIO_INTR_LOW_LEVEL));
+        ESP_ERROR_CHECK(esp_sleep_enable_gpio_wakeup());
     }
     apply_power_state(on);
     s_screen_on = on;
@@ -109,6 +123,7 @@ void screen_power_button_init(void)
     const button_gpio_config_t btn_gpio_cfg = {
         .gpio_num = BSP_BUTTONS_IO_0,
         .active_level = 0,
+        .enable_power_save = true,
     };
 
     button_handle_t btn = NULL;
@@ -119,6 +134,9 @@ void screen_power_button_init(void)
     }
 
     iot_button_register_cb(btn, BUTTON_SINGLE_CLICK, NULL, power_button_click_cb, NULL);
+}
 
+void screen_power_idle_monitor_init(void)
+{
     lv_timer_create(idle_check_timer_cb, 1000, NULL);
 }

@@ -31,11 +31,13 @@ void app_main(void)
         ret = nvs_flash_init();
     }
 
+    screen_power_button_init();
+
     lv_display_t *disp = bsp_display_start();
     lv_indev_t *tp = bsp_display_get_input_dev();
     bsp_display_backlight_on();
     bsp_sdcard_mount();
-    screen_power_button_init();
+    screen_power_idle_monitor_init();
 
     Audio_Play_Init();
     msg_driver_init();
