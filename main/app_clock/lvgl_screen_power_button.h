@@ -21,6 +21,10 @@ extern "C" {
  *        failure path double-frees the button object. Calling this first
  *        makes the button win the install race instead of losing it to the
  *        touch driver's own IRQ registration.
+ *
+ *        Also wires a long press on the same button to unmount the SD card
+ *        (with an on-screen confirmation), so it can be safely pulled
+ *        without corrupting the FAT filesystem.
  */
 void screen_power_button_init(void);
 

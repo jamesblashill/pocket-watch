@@ -12,6 +12,7 @@
 #include "app_clock/lvgl_screen_brightness.h"
 #include "app_clock/lvgl_screen_power_button.h"
 #include "app_clock/lvgl_theme_settings.h"
+#include "app_diag/power_diag.h"
 #include "app_clock/lvgl_clock_face_settings.h"
 #include "app_clock/lvgl_time_settings.h"
 #include "app_theme/app_theme.h"
@@ -41,6 +42,7 @@ void app_main(void)
 
     Audio_Play_Init();
     msg_driver_init();
+    power_diag_init();
 
     app_rtc_init();
 

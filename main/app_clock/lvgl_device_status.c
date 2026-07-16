@@ -1,6 +1,7 @@
 #include "lvgl_device_status.h"
 #include "app_theme/app_theme.h"
 #include "app_msg/submenu_ui/set_bat_msg.h"
+#include "app_diag/power_diag.h"
 
 #define TAG   "device_status"
 
@@ -29,6 +30,12 @@ static void battery_timer_cb(lv_timer_t *t)
     update_battery_ui();
 }
 
+static void delete_log_btn_event_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    power_diag_delete_log();
+}
+
 void device_status_ui_screen_init(lv_obj_t *parent)
 {
     lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
@@ -52,4 +59,17 @@ void device_status_ui_screen_init(lv_obj_t *parent)
 
     lv_timer_create(battery_timer_cb, 1000, NULL);
     update_battery_ui();
+
+    lv_obj_t *delete_log_btn = lv_button_create(parent);
+    lv_obj_set_style_pad_left(delete_log_btn, 28, 0);
+    lv_obj_set_style_pad_right(delete_log_btn, 28, 0);
+    lv_obj_set_style_pad_top(delete_log_btn, 16, 0);
+    lv_obj_set_style_pad_bottom(delete_log_btn, 16, 0);
+    /* A button is not scrollable itself, so without this a slight finger
+     * drift mid-tap would bubble up and swipe the tileview to another tile. */
+    lv_obj_remove_flag(delete_log_btn, LV_OBJ_FLAG_SCROLL_CHAIN);
+    lv_obj_add_event_cb(delete_log_btn, delete_log_btn_event_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *delete_log_btn_label = lv_label_create(delete_log_btn);
+    lv_obj_set_style_text_font(delete_log_btn_label, &lv_font_montserrat_24, 0);
+    lv_label_set_text(delete_log_btn_label, "Delete Log");
 }
