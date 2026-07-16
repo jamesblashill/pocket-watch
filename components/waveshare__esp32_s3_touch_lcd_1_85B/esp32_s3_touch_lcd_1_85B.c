@@ -659,13 +659,19 @@ esp_err_t bsp_audio_init(const i2s_std_config_t *i2s_config)
         p_i2s_cfg = i2s_config;
     }
 
+    /* Deliberately not calling i2s_channel_enable() here: the I2S driver
+     * holds an APB-freq PM lock for as long as a channel stays enabled,
+     * which blocks automatic light sleep entirely for as long as it's
+     * held. esp_codec_dev's open()/close() calls already toggle channel
+     * enable through the I2S data_if's enable() hook, so leaving channels
+     * merely initialized (not enabled) here and letting open()/close() own
+     * enable state means the lock is only held while audio is actually
+     * playing/recording. See BATTERY_OPTIMIZATIONS.md #5. */
     if (i2s_tx_chan != NULL) {
         ESP_GOTO_ON_ERROR(i2s_channel_init_std_mode(i2s_tx_chan, p_i2s_cfg), err, TAG, "I2S channel initialization failed");
-        ESP_GOTO_ON_ERROR(i2s_channel_enable(i2s_tx_chan), err, TAG, "I2S enabling failed");
     }
     if (i2s_rx_chan != NULL) {
         ESP_GOTO_ON_ERROR(i2s_channel_init_std_mode(i2s_rx_chan, p_i2s_cfg), err, TAG, "I2S channel initialization failed");
-        ESP_GOTO_ON_ERROR(i2s_channel_enable(i2s_rx_chan), err, TAG, "I2S enabling failed");
     }
 
     audio_codec_i2s_cfg_t i2s_cfg = {

@@ -37,11 +37,22 @@ static const esp_pm_config_t s_pm_full_power = {
 static const esp_pm_config_t s_pm_screen_off = {
     .max_freq_mhz = 240,
     .min_freq_mhz = 40,
+    /* Bisection (see conversation) showed DFS alone (240->40MHz, no sleep)
+     * is safe, and the hang was specifically in the light-sleep transition's
+     * cache-restore accounting - which turned out to be tied to
+     * CONFIG_PM_POWER_DOWN_CPU_IN_LIGHT_SLEEP (full CPU-domain power-off,
+     * needing a cold-restart-style cache restore) rather than the narrower
+     * CONFIG_PM_POWER_DOWN_TAGMEM_IN_LIGHT_SLEEP flag tried first. With CPU
+     * domain power-down (and its now-moot cache-restore counterpart) off,
+     * light sleep should just clock-gate rather than power-cycle the CPU. */
     .light_sleep_enable = true,
 };
 
 static bool s_screen_on = true;
 static int s_saved_brightness = 100;
+/* bsp_sdcard_mount() runs in app_main() shortly after this module is
+ * initialized, so by the time a long press is possible the card is mounted. */
+static bool s_sdcard_mounted = true;
 
 static void apply_power_state(bool on)
 {
@@ -67,20 +78,27 @@ void screen_power_set_on(bool on)
         bsp_display_brightness_set(s_saved_brightness);
         lv_display_trigger_activity(NULL);
     } else {
+        /* Stops the LVGL worker task from doing any further render/compositing
+         * work while nothing is visible. Safe to call from the worker task's
+         * own context (e.g. the idle_check_timer_cb below) - the adapter
+         * detects that case and acks immediately instead of deadlocking.
+         * Tried first, before touching the backlight/panel/PM state: if the
+         * worker doesn't actually confirm it stopped (e.g. because it's
+         * wedged on something unrelated, like a stuck SD card operation),
+         * pressing ahead into a light-sleep transition on top of that has
+         * produced unrecoverable hangs - bail out and leave the screen on
+         * instead, so the idle-check timer just retries next second. */
+        esp_err_t err = esp_lv_adapter_pause(100);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "esp_lv_adapter_pause failed: %s - leaving screen on, will retry", esp_err_to_name(err));
+            return;
+        }
         s_saved_brightness = bsp_display_brightness_get();
         bsp_display_backlight_off();
         /* ST77916 driver has no SLPIN/SLPOUT support, so DISPOFF is the best
          * available low-power step short of patching the panel driver (see
          * BATTERY_OPTIMIZATIONS.md #3). */
         esp_lcd_panel_disp_on_off(bsp_display_get_panel_handle(), false);
-        /* Stops the LVGL worker task from doing any further render/compositing
-         * work while nothing is visible. Safe to call from the worker task's
-         * own context (e.g. the idle_check_timer_cb below) - the adapter
-         * detects that case and acks immediately instead of deadlocking. */
-        esp_err_t err = esp_lv_adapter_pause(100);
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "esp_lv_adapter_pause failed: %s", esp_err_to_name(err));
-        }
         /* The touch driver never registers a GPIO ISR on this pin (LVGL polls
          * get_xy() instead - see esp_lcd_touch_register_interrupt_callback,
          * never called from bsp_touch_new), so it's safe to repurpose its
@@ -126,6 +144,30 @@ static void power_button_click_cb(void *arg, void *data)
     screen_power_set_on(!s_screen_on);
 }
 
+/* Hold the power button to unmount the SD card before pulling it, so any
+ * buffered writes get flushed instead of risking FAT corruption. iot_button
+ * treats long press and single click as mutually exclusive on release, so
+ * this never fires alongside power_button_click_cb above. */
+static void power_button_long_press_cb(void *arg, void *data)
+{
+    (void)arg;
+    (void)data;
+
+    bsp_display_lock(-1);
+    lv_obj_t *mbox = lv_msgbox_create(NULL);
+    lv_msgbox_add_title(mbox, "SD Card");
+    if (!s_sdcard_mounted) {
+        lv_msgbox_add_text(mbox, "Already unmounted - safe to remove.");
+    } else if (bsp_sdcard_unmount() == ESP_OK) {
+        s_sdcard_mounted = false;
+        lv_msgbox_add_text(mbox, "Unmounted - safe to remove.");
+    } else {
+        lv_msgbox_add_text(mbox, "Unmount failed - do not remove.");
+    }
+    lv_msgbox_add_close_button(mbox);
+    bsp_display_unlock();
+}
+
 void screen_power_button_init(void)
 {
     apply_power_state(true);
@@ -145,6 +187,7 @@ void screen_power_button_init(void)
     }
 
     iot_button_register_cb(btn, BUTTON_SINGLE_CLICK, NULL, power_button_click_cb, NULL);
+    iot_button_register_cb(btn, BUTTON_LONG_PRESS_START, NULL, power_button_long_press_cb, NULL);
 }
 
 void screen_power_idle_monitor_init(void)

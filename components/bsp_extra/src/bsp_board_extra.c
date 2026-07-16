@@ -19,6 +19,17 @@ static uint8_t Volume = 80;
 esp_asp_handle_t handle = NULL;
 esp_codec_dev_handle_t spk_codec_dev = NULL;
 
+/* Kept open only for the duration of a play - see Audio_Play_Music() /
+ * Audio_Stop_Play() and the ESP_ASP_STATE_FINISHED case below. Opening the
+ * codec is what enables the underlying I2S channel (see bsp_audio_init()),
+ * so leaving it open for the whole runtime (the previous behavior) pinned
+ * the chip out of light sleep permanently. */
+static const esp_codec_dev_sample_info_t k_speaker_fs = {
+    .bits_per_sample = 32,
+    .channel = 2,
+    .sample_rate = 16000,
+};
+
 static void Audio_PA_EN(void)
 {
     //esp_io_expander_set_level(io_expander, IO_EXPANDER_PIN_NUM_4 , 1);
@@ -54,6 +65,7 @@ static int mock_event_callback(esp_asp_event_pkt_t *event, void *ctx)
         {
             ESP_LOGI(TAG,"play done");
             Audio_PA_DIS();
+            esp_codec_dev_close(spk_codec_dev);
         }
     }
     return 0;
@@ -74,12 +86,6 @@ static esp_asp_handle_t create_simple_player(const esp_asp_data_func in_cb, void
     esp_asp_handle_t handle = NULL;
     esp_gmf_err_t err = esp_audio_simple_player_new(&cfg, &handle);
     err = esp_audio_simple_player_set_event(handle, event_cb, event_ctx);
-    esp_codec_dev_sample_info_t fs = {
-        .bits_per_sample = 32,
-        .channel = 2,
-        .sample_rate = 16000,
-    };
-    esp_codec_dev_open(spk_codec_dev, &fs);
     return handle;
 }
 
@@ -109,6 +115,8 @@ esp_gmf_err_t Audio_Play_Music(const char* url)
 {
     esp_gmf_err_t ret = ESP_GMF_ERR_OK;
     Audio_PA_DIS();
+    esp_codec_dev_sample_info_t fs = k_speaker_fs;
+    esp_codec_dev_open(spk_codec_dev, &fs);
     ret = esp_audio_simple_player_stop(handle);
     //vTaskDelay(200 / portTICK_PERIOD_MS);
     ret = esp_audio_simple_player_run(handle, url, NULL);
@@ -121,6 +129,7 @@ esp_gmf_err_t Audio_Stop_Play(void)
     esp_gmf_err_t ret = ESP_GMF_ERR_OK;
     Audio_PA_DIS();
     esp_audio_simple_player_stop(handle);
+    esp_codec_dev_close(spk_codec_dev);
     return ret;
 }
 
