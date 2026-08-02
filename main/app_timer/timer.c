@@ -1,11 +1,16 @@
 #include "timer.h"
+#include "app_clock/lvgl_screen_power_button.h"
 #include "bsp/esp-bsp.h"
 #include "bsp_board_extra.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 #define TAG   "app_timer"
 
-#define TIMER_SOUND_URL   "file://sdcard/timer/beep.wav"
+/* Reuse the alarm's sound file rather than a dedicated timer/ one on the SD
+ * card - keeps this working without requiring a separate asset to be
+ * provisioned. */
+#define TIMER_SOUND_URL   "file://sdcard/alarm/forest-birds.wav"
 
 #define DEFAULT_DURATION_SEC   (5 * 60)
 
@@ -74,9 +79,9 @@ uint16_t app_timer_get_remaining(void)
     return s_remaining_sec;
 }
 
-static void timer_tick_cb(lv_timer_t *t)
+static void timer_tick_cb(void *arg)
 {
-    LV_UNUSED(t);
+    (void)arg;
 
     if (s_ringing) {
         /* beep.wav is a short one-shot clip; re-firing it whenever playback
@@ -101,11 +106,28 @@ static void timer_tick_cb(lv_timer_t *t)
         s_running = false;
         s_ringing = true;
         ESP_LOGI(TAG, "Timer finished, ringing");
+        /* Wake the screen the same way the alarm does, in case it finishes
+         * while the screen is off. */
+        screen_power_set_on(true);
         Audio_Play_Music(TIMER_SOUND_URL);
     }
 }
 
 void app_timer_init(void)
 {
-    lv_timer_create(timer_tick_cb, 1000, NULL);
+    /* Deliberately an esp_timer, not an lv_timer: lv_timer callbacks only run
+     * from inside lv_timer_handler(), and screen_power_set_on(false) stops
+     * the LVGL worker task from calling that at all (via esp_lv_adapter_pause())
+     * to save power while the screen is off. An lv_timer countdown would
+     * simply stop ticking while "asleep", so the timer would appear paused
+     * whenever the screen turns off. An esp_timer runs on the esp_timer
+     * service task instead, independent of the paused LVGL worker. See
+     * app_alarm_init() for the same reasoning. */
+    const esp_timer_create_args_t timer_args = {
+        .callback = timer_tick_cb,
+        .name = "app_timer_tick",
+    };
+    esp_timer_handle_t timer;
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &timer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(timer, 1000000));
 }

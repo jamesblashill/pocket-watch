@@ -19,10 +19,10 @@ void screen_power_set_display(lv_display_t *disp);
 /**
  * @brief Wire up the board's BOOT button (GPIO0) to toggle the LCD backlight
  *        on/off, so the screen can be turned off and back on without
- *        touching the capacitive touchscreen. If the alarm is currently
- *        ringing, a press also silences it (in addition to toggling the
- *        screen). Sets the initial (full-power) CPU frequency policy - see
- *        screen_power_set_on().
+ *        touching the capacitive touchscreen. If the alarm or countdown
+ *        timer is currently ringing, a press also silences it (in addition
+ *        to toggling the screen). Sets the initial (full-power) CPU
+ *        frequency policy - see screen_power_set_on().
  *
  *        Must be called before bsp_display_start(): the button's
  *        enable_power_save path installs the shared GPIO ISR service via

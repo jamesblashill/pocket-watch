@@ -1,5 +1,6 @@
 #include "lvgl_screen_power_button.h"
 #include "app_alarm/alarm.h"
+#include "app_timer/timer.h"
 #include "bsp/esp-bsp.h"
 #include "iot_button.h"
 #include "button_gpio.h"
@@ -20,9 +21,10 @@
 
 /* Full power while the screen is on, so touch and LVGL rendering stay
  * snappy. Throttled while the screen is off: the LVGL worker is paused (see
- * esp_lv_adapter_pause() below) so only the 1s alarm-check timer needs to
- * run, letting the CPU idle at a low frequency and light-sleep between
- * wakes, waking for the power button or a fired alarm. The esp_lvgl_adapter
+ * esp_lv_adapter_pause() below) so only the 1s alarm-check and timer-tick
+ * esp_timers need to run, letting the CPU idle at a low frequency and
+ * light-sleep between wakes, waking for the power button or a fired alarm
+ * or timer. The esp_lvgl_adapter
  * fork in components/esp_lvgl_adapter drives LVGL's tick from
  * esp_timer_get_time() on demand instead of a periodic esp_timer, so there's
  * no periodic tick source left to cap the sleep window - light sleep can now
@@ -187,7 +189,7 @@ static void idle_check_timer_cb(lv_timer_t *t)
 {
     LV_UNUSED(t);
 
-    if (!s_screen_on || app_alarm_is_ringing()) {
+    if (!s_screen_on || app_alarm_is_ringing() || app_timer_is_ringing()) {
         return;
     }
     if (lv_display_get_inactive_time(NULL) >= IDLE_TIMEOUT_MS) {
@@ -202,6 +204,9 @@ static void power_button_click_cb(void *arg, void *data)
 
     if (app_alarm_is_ringing()) {
         app_alarm_stop_ringing();
+    }
+    if (app_timer_is_ringing()) {
+        app_timer_stop_ringing();
     }
 
     screen_power_set_on(!s_screen_on);

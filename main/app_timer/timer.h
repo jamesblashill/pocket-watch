@@ -7,9 +7,9 @@
 extern "C" {
 #endif
 
-/* Starts the once-a-second countdown watcher. Must be called once from
- * within the LVGL lock (it creates an lv_timer), analogous to
- * app_alarm_init(). */
+/* Starts the once-a-second countdown watcher. Runs on an esp_timer (not
+ * an lv_timer) so it keeps ticking while the screen is off and the LVGL
+ * worker task is paused; analogous to app_alarm_init(). */
 void app_timer_init(void);
 
 /* Sets the countdown length. Ignored while running or ringing so editing
