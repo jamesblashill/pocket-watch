@@ -195,6 +195,66 @@ esp_err_t esp_lv_adapter_resume(void);
 void esp_lv_adapter_dump_state(void);
 
 /**
+ * @brief Wait for any in-flight flush on every registered display to finish
+ *
+ * esp_lv_adapter_pause() only guarantees the worker won't start a *new*
+ * render/flush cycle - the flush kicked off by its last lv_timer_handler()
+ * call before acking may still be running asynchronously (e.g. DMA-driven,
+ * completed later via an IO callback) when pause() returns. Callers that
+ * are about to let the bus/panel go idle for a low-power transition (light
+ * sleep, panel power-down) should call this right after a successful pause
+ * to close that window, rather than assuming "paused" means "bus idle".
+ *
+ * @param[in] timeout_ms Timeout in ms, -1 for infinite
+ * @return
+ *      - ESP_OK: Success, no display has a flush in flight
+ *      - ESP_ERR_TIMEOUT: At least one display's flush didn't finish in time
+ *      - ESP_ERR_INVALID_STATE: Adapter not initialized
+ */
+esp_err_t esp_lv_adapter_wait_flush_idle(int32_t timeout_ms);
+
+/**
+ * @brief Detach a display's LCD panel/panel_io without deleting adapter or LVGL state
+ *
+ * Switches the display to dummy-draw internally (LVGL keeps rendering into
+ * its buffers, nothing gets sent out) so the caller can safely delete the
+ * panel/panel_io/bus out from under it - e.g. before a low-power
+ * transition where the QSPI/DMA state isn't guaranteed to survive. Pair
+ * with esp_lv_adapter_rebind_lcd_panel_internal() once a replacement panel
+ * exists.
+ *
+ * @note Caller must already have the worker paused with no flush in
+ *       flight (esp_lv_adapter_pause() + esp_lv_adapter_wait_flush_idle())
+ *       before calling this - it does not do that itself.
+ *
+ * @param[in] disp LVGL display handle
+ * @return
+ *      - ESP_OK: Success
+ *      - ESP_ERR_NOT_FOUND: Display not registered with the adapter
+ *      - ESP_ERR_INVALID_STATE: Adapter not initialized, or panel already detached
+ */
+esp_err_t esp_lv_adapter_detach_panel(lv_display_t *disp);
+
+/**
+ * @brief Rebind a display to a freshly (re)created LCD panel
+ *
+ * Points a previously-detached display at a new panel/panel_io, refetches
+ * framebuffers, and requests a full refresh. Caller is responsible for
+ * calling esp_lv_adapter_resume() afterward to restart rendering.
+ *
+ * @param[in] disp     LVGL display handle
+ * @param[in] panel    New esp_lcd panel handle
+ * @param[in] panel_io New esp_lcd panel IO handle (can be NULL for RGB/MIPI DSI)
+ * @return
+ *      - ESP_OK: Success
+ *      - ESP_ERR_INVALID_STATE: Display's panel was not detached first
+ *      - ESP_ERR_NOT_FOUND: Display not registered with the adapter
+ */
+esp_err_t esp_lv_adapter_rebind_lcd_panel_internal(lv_display_t *disp,
+                                                   esp_lcd_panel_handle_t panel,
+                                                   esp_lcd_panel_io_handle_t panel_io);
+
+/**
  * @brief Prepare all displays for sleep
  *
  * Automatically detaches all LCD panels while preserving LVGL display objects

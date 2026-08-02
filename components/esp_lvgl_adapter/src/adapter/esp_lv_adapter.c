@@ -361,6 +361,42 @@ void esp_lv_adapter_dump_state(void)
              (unsigned)(stack_words_free * sizeof(StackType_t)));
 }
 
+esp_err_t esp_lv_adapter_wait_flush_idle(int32_t timeout_ms)
+{
+    ESP_RETURN_ON_FALSE(s_ctx.inited, ESP_ERR_INVALID_STATE, TAG, "Adapter not initialized");
+
+    int64_t deadline_us = (timeout_ms < 0) ? INT64_MAX : (esp_timer_get_time() + (int64_t)timeout_ms * 1000);
+
+    for (esp_lv_adapter_display_node_t *node = s_ctx.display_list; node; node = node->next) {
+        if (!node->lv_disp) {
+            continue;
+        }
+        int64_t remaining_ms = (deadline_us == INT64_MAX) ? -1
+            : (deadline_us - esp_timer_get_time()) / 1000;
+        if (remaining_ms < 0 && deadline_us != INT64_MAX) {
+            remaining_ms = 0;
+        }
+        esp_err_t ret = display_manager_wait_flush_done(node->lv_disp, (int32_t)remaining_ms);
+        if (ret != ESP_OK) {
+            return ret;
+        }
+    }
+    return ESP_OK;
+}
+
+esp_err_t esp_lv_adapter_detach_panel(lv_display_t *disp)
+{
+    ESP_RETURN_ON_FALSE(s_ctx.inited, ESP_ERR_INVALID_STATE, TAG, "Adapter not initialized");
+    ESP_RETURN_ON_FALSE(disp, ESP_ERR_INVALID_ARG, TAG, "Invalid display handle");
+
+    esp_lv_adapter_display_node_t *node = display_manager_get_node(disp);
+    ESP_RETURN_ON_FALSE(node, ESP_ERR_NOT_FOUND, TAG, "Display not found");
+    ESP_RETURN_ON_FALSE(node->cfg.base.panel, ESP_ERR_INVALID_STATE, TAG, "Panel already detached");
+
+    adapter_detach_display_node(node);
+    return ESP_OK;
+}
+
 /**
  * @brief Prepare all displays for sleep with automatic recovery on failure
  *

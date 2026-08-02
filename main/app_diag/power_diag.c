@@ -32,6 +32,10 @@ static size_t s_current_history_next;
  * the run to read it. */
 #define LOG_PATH           (BSP_SD_MOUNT_POINT "/power_diag.log")
 
+/* Disabled for now - flip to 1 to resume writing power_diag.log to the SD
+ * card. Console output (printf above) is unaffected. */
+#define LOG_TO_SD 0
+
 static esp_timer_handle_t s_timer;
 
 static void diag_timer_cb(void *arg)
@@ -78,6 +82,7 @@ static void diag_timer_cb(void *arg)
      * repeatedly with no other sign of life. */
     esp_lv_adapter_dump_state();
 
+#if LOG_TO_SD
     FILE *f = fopen(LOG_PATH, "a");
     if (!f) {
         ESP_LOGW(TAG, "could not open %s for append", LOG_PATH);
@@ -86,6 +91,7 @@ static void diag_timer_cb(void *arg)
 
     fprintf(f, "%s\n", line);
     fclose(f);
+#endif
     /* esp_pm_dump_locks() dropped from the periodic loop: it already did
      * its job confirming the I2S-lock hypothesis earlier, and calling it
      * every 5s - writing its output to a FILE* backed by (slow, blocking)
