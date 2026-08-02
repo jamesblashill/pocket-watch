@@ -183,6 +183,18 @@ esp_err_t esp_lv_adapter_pause(int32_t timeout_ms);
 esp_err_t esp_lv_adapter_resume(void);
 
 /**
+ * @brief Log the LVGL worker task's current FreeRTOS state and internal
+ *        pause bookkeeping
+ *
+ * Temporary diagnostic aid for tracking down cases where the worker task
+ * stops acking esp_lv_adapter_pause() (logged as ESP_ERR_TIMEOUT by
+ * callers) - lets a caller with its own independent periodic timer (so it
+ * keeps running even if the worker itself is wedged) record whether the
+ * worker is genuinely blocked, and on what, versus merely slow.
+ */
+void esp_lv_adapter_dump_state(void);
+
+/**
  * @brief Prepare all displays for sleep
  *
  * Automatically detaches all LCD panels while preserving LVGL display objects

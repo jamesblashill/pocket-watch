@@ -68,11 +68,14 @@ static bool us_eastern_dst_active(int year, int month, int day)
 static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
+        ESP_LOGI(TAG, "WiFi STA started, connecting to '%s'", WIFI_SSID);
         esp_wifi_connect();
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGW(TAG, "WiFi disconnected, retrying");
         esp_wifi_connect();
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *)data;
+        ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
@@ -94,6 +97,8 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 /* Best-effort geo-IP lookup for the current UTC offset (DST already applied). */
 static bool fetch_utc_offset_seconds(int *out_offset)
 {
+    ESP_LOGI(TAG, "Looking up UTC offset via geo-IP (%s)", GEOIP_URL);
+
     s_http_resp_len = 0;
     s_http_resp[0] = '\0';
 
@@ -133,6 +138,7 @@ static bool fetch_utc_offset_seconds(int *out_offset)
  * Common tail for every exit path out of wifi_time_sync_task(). */
 static void finish_sync(wifi_time_sync_result_t result)
 {
+    ESP_LOGI(TAG, "Time sync %s, releasing WiFi", result == WIFI_TIME_SYNC_OK ? "succeeded" : "failed");
     wifi_driver_release();
     s_sync_in_progress = false;
 
@@ -158,6 +164,7 @@ static void wifi_time_sync_task(void *arg)
     int utc_offset_seconds;
     bool have_offset = fetch_utc_offset_seconds(&utc_offset_seconds);
 
+    ESP_LOGI(TAG, "Starting SNTP sync with %s", NTP_SERVER);
     esp_sntp_config_t sntp_config = ESP_NETIF_SNTP_DEFAULT_CONFIG(NTP_SERVER);
     esp_netif_sntp_init(&sntp_config);
     esp_err_t sync_err = esp_netif_sntp_sync_wait(pdMS_TO_TICKS(10000));
@@ -169,6 +176,7 @@ static void wifi_time_sync_task(void *arg)
     }
 
     time_t utc_now = time(NULL);
+    ESP_LOGI(TAG, "SNTP sync ok, UTC now = %lld", (long long)utc_now);
 
     if (!have_offset) {
         struct tm utc_tm;
@@ -236,6 +244,8 @@ void wifi_time_sync_start(wifi_time_sync_cb_t cb)
     }
     s_sync_in_progress = true;
     s_cb = cb;
+
+    ESP_LOGI(TAG, "Time sync requested");
 
     xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     wifi_driver_acquire();
