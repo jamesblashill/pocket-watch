@@ -268,6 +268,21 @@ esp_err_t esp_lv_adapter_pause(int32_t timeout_ms)
     TickType_t ticks = (timeout_ms < 0) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
     if (xSemaphoreTake(s_ctx.pause_done_sem, ticks) != pdTRUE) {
         s_ctx.paused = false;
+        /* The worker's loop only samples s_ctx.paused once per iteration,
+         * right after its vTaskDelay(task_delay_ms) - so it can read paused
+         * as true a moment after we've given up waiting for it here, and
+         * commit to ulTaskNotifyTake(portMAX_DELAY) believing it's now
+         * paused. Nothing else ever calls esp_lv_adapter_resume() on a
+         * timeout (callers just bail out), so without this notify that
+         * worker is orphaned forever - no more lv_timer_handler(), no more
+         * rendering, and no more of the LVGL timers (including any retry
+         * logic) that depend on it running. Giving the notify unconditionally
+         * releases a worker that just entered that blocking wait, and is a
+         * harmless no-op otherwise (it's consumed by the worker's next
+         * legitimate pause cycle at worst). */
+        if (s_ctx.task) {
+            xTaskNotifyGive(s_ctx.task);
+        }
         return ESP_ERR_TIMEOUT;
     }
     return ESP_OK;
@@ -277,8 +292,12 @@ esp_err_t esp_lv_adapter_resume(void)
 {
     ESP_RETURN_ON_FALSE(s_ctx.inited, ESP_ERR_INVALID_STATE, TAG, "Adapter not initialized");
     if (!s_ctx.paused) {
+        ESP_LOGI(TAG, "resume: no-op, not paused (task state=%d)",
+                 s_ctx.task ? (int)eTaskGetState(s_ctx.task) : -1);
         return ESP_OK;
     }
+    ESP_LOGI(TAG, "resume: waking worker (task state=%d)",
+             s_ctx.task ? (int)eTaskGetState(s_ctx.task) : -1);
 
     bool was_sleeping = s_ctx.sleep_state.is_sleeping;
 
@@ -314,6 +333,32 @@ esp_err_t esp_lv_adapter_resume(void)
     }
 
     return ESP_OK;
+}
+
+static const char *task_state_name(eTaskState state)
+{
+    switch (state) {
+    case eRunning:   return "Running";
+    case eReady:     return "Ready";
+    case eBlocked:   return "Blocked";
+    case eSuspended: return "Suspended";
+    case eDeleted:   return "Deleted";
+    default:         return "Invalid";
+    }
+}
+
+void esp_lv_adapter_dump_state(void)
+{
+    if (!s_ctx.inited || !s_ctx.task) {
+        ESP_LOGW(TAG, "dump_state: adapter not initialized or worker task missing");
+        return;
+    }
+
+    eTaskState state = eTaskGetState(s_ctx.task);
+    UBaseType_t stack_words_free = uxTaskGetStackHighWaterMark(s_ctx.task);
+    ESP_LOGI(TAG, "worker: state=%s paused=%d pause_ack=%d stack_free=%uB",
+             task_state_name(state), (int)s_ctx.paused, (int)s_ctx.pause_ack,
+             (unsigned)(stack_words_free * sizeof(StackType_t)));
 }
 
 /**

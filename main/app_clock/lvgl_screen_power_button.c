@@ -37,15 +37,17 @@ static const esp_pm_config_t s_pm_full_power = {
 static const esp_pm_config_t s_pm_screen_off = {
     .max_freq_mhz = 240,
     .min_freq_mhz = 40,
-    /* Bisection (see conversation) showed DFS alone (240->40MHz, no sleep)
-     * is safe, and the hang was specifically in the light-sleep transition's
-     * cache-restore accounting - which turned out to be tied to
-     * CONFIG_PM_POWER_DOWN_CPU_IN_LIGHT_SLEEP (full CPU-domain power-off,
-     * needing a cold-restart-style cache restore) rather than the narrower
-     * CONFIG_PM_POWER_DOWN_TAGMEM_IN_LIGHT_SLEEP flag tried first. With CPU
-     * domain power-down (and its now-moot cache-restore counterpart) off,
-     * light sleep should just clock-gate rather than power-cycle the CPU. */
-    .light_sleep_enable = true,
+    /* Light sleep is back off again, temporarily, to isolate a second hang:
+     * with it enabled the device now freezes solid (no panic, no watchdog
+     * trigger, not even the independent power_diag esp_timer keeps ticking)
+     * right as it's about to actually enter automatic light sleep for the
+     * first time - consistent with something below the OS (cache/MSPI/PSRAM
+     * suspend-resume around the sleep transition itself) rather than
+     * anything at the task level. Bisection previously showed DFS alone
+     * (240->40MHz, no sleep) is safe, so that's what's left here while the
+     * light-sleep-entry hang gets tracked down. Flip back to true only once
+     * that's resolved. */
+    .light_sleep_enable = false,
 };
 
 static bool s_screen_on = true;
@@ -70,11 +72,13 @@ void screen_power_set_on(bool on)
 
     if (on) {
         gpio_wakeup_disable(BSP_LCD_TOUCH_INT);
-        esp_lv_adapter_resume();
+        esp_err_t resume_err = esp_lv_adapter_resume();
         /* DISPON needs a moment to settle before the next flush reaches the
          * panel, or the first frame back can show a brief glitch. */
-        esp_lcd_panel_disp_on_off(bsp_display_get_panel_handle(), true);
+        esp_err_t dispon_err = esp_lcd_panel_disp_on_off(bsp_display_get_panel_handle(), true);
         vTaskDelay(pdMS_TO_TICKS(20));
+        ESP_LOGI(TAG, "screen on: resume=%s dispon=%s restoring brightness=%d",
+                 esp_err_to_name(resume_err), esp_err_to_name(dispon_err), s_saved_brightness);
         bsp_display_brightness_set(s_saved_brightness);
         lv_display_trigger_activity(NULL);
     } else {
@@ -94,6 +98,7 @@ void screen_power_set_on(bool on)
             return;
         }
         s_saved_brightness = bsp_display_brightness_get();
+        ESP_LOGI(TAG, "screen off: saving brightness=%d", s_saved_brightness);
         bsp_display_backlight_off();
         /* ST77916 driver has no SLPIN/SLPOUT support, so DISPOFF is the best
          * available low-power step short of patching the panel driver (see

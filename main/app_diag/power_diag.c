@@ -1,10 +1,12 @@
 #include "power_diag.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_pm.h"
+#include "esp_lv_adapter.h"
 #include "bsp/esp-bsp.h"
 
 #include "app_msg/submenu_ui/set_bat_msg.h"
@@ -12,6 +14,15 @@
 
 #define TAG                "power_diag"
 #define SAMPLE_PERIOD_US   (5 * 1000 * 1000)
+
+/* Rolling window of recent current readings (60s at the 5s sample period),
+ * printed to the serial console each tick so a quick USB reconnect is
+ * enough to check in on a run without pulling the SD card. Only ever
+ * touched from diag_timer_cb, so no locking needed. */
+#define CURRENT_HISTORY_LEN 12
+static int16_t s_current_history_ma[CURRENT_HISTORY_LEN];
+static size_t s_current_history_count;
+static size_t s_current_history_next;
 
 /* Written to the SD card (already mounted at boot) rather than only to the
  * serial console, so a run can be captured with USB fully disconnected -
@@ -44,6 +55,28 @@ static void diag_timer_cb(void *arg)
              screen_power_is_on() ? "on" : "off", soc, current_ma);
 
     printf("%s\n", line);
+
+    s_current_history_ma[s_current_history_next] = current_ma;
+    s_current_history_next = (s_current_history_next + 1) % CURRENT_HISTORY_LEN;
+    if (s_current_history_count < CURRENT_HISTORY_LEN) {
+        s_current_history_count++;
+    }
+
+    char history_line[64 + CURRENT_HISTORY_LEN * 8] = "power_diag current history (mA, oldest first):";
+    size_t len = strlen(history_line);
+    size_t oldest = (s_current_history_count < CURRENT_HISTORY_LEN) ? 0 : s_current_history_next;
+    for (size_t i = 0; i < s_current_history_count; i++) {
+        int16_t v = s_current_history_ma[(oldest + i) % CURRENT_HISTORY_LEN];
+        len += snprintf(history_line + len, sizeof(history_line) - len, "%s%d", i ? "," : " ", v);
+    }
+    printf("%s\n", history_line);
+
+    /* Logged from this timer specifically because it runs standalone
+     * (esp_timer, not an LVGL timer), so it keeps reporting even if the
+     * LVGL worker task itself is the thing that's wedged - which is exactly
+     * the case this is meant to catch: esp_lv_adapter_pause() timing out
+     * repeatedly with no other sign of life. */
+    esp_lv_adapter_dump_state();
 
     FILE *f = fopen(LOG_PATH, "a");
     if (!f) {

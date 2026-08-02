@@ -17,6 +17,22 @@ CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
 # CONFIG_PM_POWER_DOWN_TAGMEM_IN_LIGHT_SLEEP is not set
 # CONFIG_PM_POWER_DOWN_CPU_IN_LIGHT_SLEEP is not set
 # CONFIG_PM_RESTORE_CACHE_TAGMEM_AFTER_LIGHT_SLEEP is not set
+# ESP32-S3's USB-Serial-JTAG peripheral doesn't survive automatic light
+# sleep (no SOC_USB_SERIAL_JTAG_SUPPORT_LIGHT_SLEEP) - without this, the
+# monitor host loses the device the moment the screen-off power policy lets
+# the chip nap, and needs a physical unplug/replug to re-enumerate. This
+# holds a light-sleep PM lock for as long as a USB Serial/JTAG host is
+# actually attached, and releases it the instant nothing's listening - so it
+# only costs sleep while monitoring, not on battery in the field.
+CONFIG_USJ_NO_AUTO_LS_ON_CONNECTION=y
+# A panic (crash/exception) currently prints its backtrace to the console
+# and reboots (CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT) - fine if a monitor is
+# attached, but if it happens on battery with nothing listening, that
+# backtrace is gone forever and a crash is indistinguishable from a hang.
+# Flash coredump persists it in the `coredump` partition (partitions.csv)
+# so `idf.py coredump-info`/`espcoredump.py` can decode it after the fact,
+# whether or not anyone was watching when it happened.
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 CONFIG_ESP_CONSOLE_UART_CUSTOM=y
 CONFIG_ESP_CONSOLE_UART_BAUDRATE=2000000
 CONFIG_FREERTOS_HZ=1000

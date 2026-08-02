@@ -263,7 +263,7 @@ dependencies:
     - name: lvgl/lvgl
       version: '>=8,<10'
     source:
-      path: /Users/james/dev/01_comprehensive_example/components/esp_lvgl_adapter
+      path: /Users/james/dev/pocket-watch/components/esp_lvgl_adapter
       type: local
     version: 0.3.2
   espressif/esp_mmap_assets:
@@ -427,13 +427,13 @@ dependencies:
   waveshare/pcf85063a:
     dependencies: []
     source:
-      path: /Users/james/dev/01_comprehensive_example/components/waveshare__pcf85063a
+      path: /Users/james/dev/pocket-watch/components/waveshare__pcf85063a
       type: local
     version: 1.0.1
   waveshare/qmi8658:
     dependencies: []
     source:
-      path: /Users/james/dev/01_comprehensive_example/components/waveshare__qmi8658
+      path: /Users/james/dev/pocket-watch/components/waveshare__qmi8658
       type: local
     version: 1.0.1
 direct_dependencies:
