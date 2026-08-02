@@ -6,6 +6,16 @@
 extern "C" {
 #endif
 
+typedef struct _lv_display_t lv_display_t;
+
+/**
+ * @brief Give this module the display handle to detach/rebind around
+ *        low-power transitions. Call once, after bsp_display_start()
+ *        returns it - screen_power_set_on() is a no-op on the panel-cycle
+ *        step until this has been set.
+ */
+void screen_power_set_display(lv_display_t *disp);
+
 /**
  * @brief Wire up the board's BOOT button (GPIO0) to toggle the LCD backlight
  *        on/off, so the screen can be turned off and back on without

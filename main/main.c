@@ -36,6 +36,7 @@ void app_main(void)
 
     lv_display_t *disp = bsp_display_start();
     lv_indev_t *tp = bsp_display_get_input_dev();
+    screen_power_set_display(disp);
     bsp_display_backlight_on();
     bsp_sdcard_mount();
     screen_power_idle_monitor_init();

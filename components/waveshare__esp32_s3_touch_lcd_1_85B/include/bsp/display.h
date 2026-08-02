@@ -83,6 +83,46 @@ esp_err_t bsp_display_new(const bsp_display_config_t *config, esp_lcd_panel_hand
 esp_lcd_panel_handle_t bsp_display_get_panel_handle(void);
 
 /**
+ * @brief Get the LCD panel IO handle created by bsp_display_new()/bsp_display_start()
+ *
+ * @return Panel IO handle, or NULL if the display has not been initialized yet
+ */
+esp_lcd_panel_io_handle_t bsp_display_get_panel_io_handle(void);
+
+/**
+ * @brief Free the LCD panel created by bsp_display_new()
+ *
+ * Deletes the panel and panel IO objects and frees the QSPI bus. Pair with
+ * bsp_display_new_panel() when the panel/bus needs to be torn down and
+ * rebuilt around a low-power transition where the QSPI/DMA peripheral
+ * state underneath isn't guaranteed to survive (e.g. automatic light
+ * sleep on chips with no peripheral sleep retention) - not needed for a
+ * normal one-time bring-up at boot, that's what bsp_display_new() is for.
+ *
+ * @return
+ *      - ESP_OK    On success
+ *      - Else      spi_bus_free() failure
+ */
+esp_err_t bsp_display_free_panel(void);
+
+/**
+ * @brief Recreate the LCD panel after bsp_display_free_panel()
+ *
+ * Re-runs the same reset/bring-up sequence as bsp_display_new() (including
+ * the hardware reset pulse and full vendor init command sequence - the
+ * panel is not assumed to have retained any state), and replaces the
+ * module's held panel/IO handles in place, so bsp_display_get_panel_handle()
+ * and bsp_display_get_panel_io_handle() return the fresh ones afterward.
+ *
+ * @param[out] ret_panel New esp_lcd panel handle (optional, may be NULL)
+ * @param[out] ret_io    New esp_lcd IO handle (optional, may be NULL)
+ * @return
+ *      - ESP_OK    On success
+ *      - Else      esp_lcd failure
+ */
+esp_err_t bsp_display_new_panel(esp_lcd_panel_handle_t *ret_panel, esp_lcd_panel_io_handle_t *ret_io);
+
+/**
  * @brief Turn on display backlight
  *
  * Backlight is controlled with IO expander TCA9554.

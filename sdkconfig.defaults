@@ -7,7 +7,17 @@ CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
 # CONFIG_SPIRAM_FETCH_INSTRUCTIONS is not set
 # CONFIG_SPIRAM_RODATA is not set
-CONFIG_SPIRAM_SPEED_80M=y
+# Dropped from 80M: automatic light sleep was hard-hanging the whole chip
+# (no panic, no watchdog, no coredump - see conversation) every time it
+# actually tried to enter light sleep, even with CPU-domain power-down and
+# PSRAM XIP both already off. Isolated to the light-sleep transition itself
+# via light_sleep_enable=false bisection (main/app_clock/lvgl_screen_power_button.c).
+# Octal PSRAM at 80MHz is the tightest-margin PSRAM config on the S3, and
+# the cache-suspend/resume that happens around every sleep entry/exit is
+# exactly where that margin gets spent - dropping to 40MHz trades PSRAM
+# bandwidth for headroom there. Only revert to 80M once light sleep has run
+# hang-free for a while at 40M; if it still hangs, this wasn't it.
+CONFIG_SPIRAM_SPEED_40M=y
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=0
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y

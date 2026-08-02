@@ -868,6 +868,16 @@ esp_err_t bsp_display_new(const bsp_display_config_t *config, esp_lcd_panel_hand
     } 
 
     // reconfig spi bus
+    /* The probe IO handle above is never used again - delete it (and its
+     * spi_device) before creating the real one at full speed. Harmless to
+     * skip at boot (bsp_display_new() only ran once, so a single leaked
+     * device on the bus went unnoticed), but this function now also runs
+     * on every wake from light sleep (see screen_power_set_on()), and a
+     * spi_device that's never removed means spi_bus_free() can never fully
+     * succeed ("not all CSses freed"), which then makes the *next*
+     * spi_bus_initialize() fail too - cascading into a permanently blank,
+     * unrecoverable screen after the first sleep/wake cycle. */
+    esp_lcd_panel_io_del(*ret_io);
     io_config.pclk_hz = 80*1000*1000;
     ESP_RETURN_ON_ERROR(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)BSP_LCD_SPI_NUM, &io_config, ret_io), TAG, "New panel IO failed");
     
@@ -917,6 +927,37 @@ err:
 esp_lcd_panel_handle_t bsp_display_get_panel_handle(void)
 {
     return panel_handle;
+}
+
+esp_lcd_panel_io_handle_t bsp_display_get_panel_io_handle(void)
+{
+    return io_handle;
+}
+
+esp_err_t bsp_display_free_panel(void)
+{
+    if (panel_handle) {
+        esp_lcd_panel_del(panel_handle);
+        panel_handle = NULL;
+    }
+    if (io_handle) {
+        esp_lcd_panel_io_del(io_handle);
+        io_handle = NULL;
+    }
+    return spi_bus_free(BSP_LCD_SPI_NUM);
+}
+
+esp_err_t bsp_display_new_panel(esp_lcd_panel_handle_t *ret_panel, esp_lcd_panel_io_handle_t *ret_io)
+{
+    bsp_display_config_t disp_config = {0};
+    esp_err_t ret = bsp_display_new(&disp_config, &panel_handle, &io_handle);
+    if (ret_panel) {
+        *ret_panel = panel_handle;
+    }
+    if (ret_io) {
+        *ret_io = io_handle;
+    }
+    return ret;
 }
 
 esp_err_t bsp_touch_new(const bsp_display_cfg_t *cfg, esp_lcd_touch_handle_t *ret_touch)
