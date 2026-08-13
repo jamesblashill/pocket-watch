@@ -48,7 +48,10 @@ idf.py -p <PORT> flash monitor
 ## Battery optimization
 
 Known battery-life findings and their status are tracked in
-[BATTERY_OPTIMIZATIONS.md](BATTERY_OPTIMIZATIONS.md).
+[BATTERY_OPTIMIZATIONS.md](BATTERY_OPTIMIZATIONS.md). The reusable lessons
+from getting this project from ~30 min to 3+ days of battery life — meant to
+be copied into new projects — are written up in
+[BATTERY_OPTIMIZATION_PLAYBOOK.md](BATTERY_OPTIMIZATION_PLAYBOOK.md).
 
 ## License
 
