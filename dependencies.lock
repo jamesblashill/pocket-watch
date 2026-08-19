@@ -296,6 +296,16 @@ dependencies:
     - esp32c5
     - esp32c6
     version: 0.6.1
+  espressif/esp_websocket_client:
+    component_hash: dc00233af846f3a744ada283a300e0d586040aadc3ee67361645ecdce4523672
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.8.0
   espressif/freetype:
     component_hash: a4169cdd22b3572342b2d640d7082405b8895e3214539283601c03412589b65d
     dependencies:
@@ -449,6 +459,7 @@ direct_dependencies:
 - espressif/esp_lv_eaf_player
 - espressif/esp_lv_fs
 - espressif/esp_lvgl_adapter
+- espressif/esp_websocket_client
 - espressif/freetype
 - espressif/knob
 - espressif/qrcode
@@ -456,6 +467,6 @@ direct_dependencies:
 - lvgl/lvgl
 - waveshare/pcf85063a
 - waveshare/qmi8658
-manifest_hash: 4142529db5324e70aea5c68450261c675e7b2bbaeda1f81fc770a4c33d1c4909
+manifest_hash: abc2bb121b7f7572fd4d97670b17e78cbb7a5ea79b2598ef3d06986caaff264d
 target: esp32s3
 version: 2.0.0

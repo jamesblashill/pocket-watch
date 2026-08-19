@@ -41,6 +41,16 @@ esp_gmf_err_t Audio_Pause_Play(void);
 esp_asp_state_t Audio_Get_Current_State(void);
 void Audio_Play_Deinit(void);
 
+/* Raw PCM16 mono streaming capture/playback - see bsp_board_extra.c for why
+ * these are separate from the Audio_Play_Music() file-playback path. */
+esp_err_t Audio_Capture_Open(uint32_t sample_rate);
+esp_err_t Audio_Capture_Read(uint8_t *buf, size_t len);
+void Audio_Capture_Close(void);
+
+esp_err_t Audio_Stream_Open(uint32_t sample_rate);
+esp_err_t Audio_Stream_Write(const uint8_t *buf, size_t len);
+void Audio_Stream_Close(void);
+
 
 #ifdef __cplusplus
 }
