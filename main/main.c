@@ -15,8 +15,11 @@
 #include "app_diag/power_diag.h"
 #include "app_clock/lvgl_clock_face_settings.h"
 #include "app_clock/lvgl_time_settings.h"
+#include "app_clock/lvgl_agent.h"
+#include "app_clock/lvgl_notes.h"
 #include "app_theme/app_theme.h"
 #include "app_rtc/rtc.h"
+#include "app_agent/agent.h"
 
 #define TAG   "main"
 
@@ -52,6 +55,7 @@ void app_main(void)
     app_theme_init();
     app_alarm_init();
     app_timer_init();
+    app_agent_init();
 
     main_tileview = lv_tileview_create(NULL);
     /* Clock sits at col 1 so it has a tile on each side: device status to the
@@ -61,14 +65,18 @@ void app_main(void)
      * the clock at row 0, col 1 (swipe up from the clock, swipe down to
      * return - LV_DIR_TOP/BOTTOM move to row-1/row+1 respectively). */
     lv_obj_t *tile_device_status = lv_tileview_add_tile(main_tileview, 0, 1, LV_DIR_HOR);
-    lv_obj_t *tile_clock = lv_tileview_add_tile(main_tileview, 1, 1, (lv_dir_t)(LV_DIR_HOR | LV_DIR_TOP));
+    lv_obj_t *tile_clock = lv_tileview_add_tile(main_tileview, 1, 1, (lv_dir_t)(LV_DIR_HOR | LV_DIR_TOP | LV_DIR_BOTTOM));
     lv_obj_t *tile_alarm = lv_tileview_add_tile(main_tileview, 2, 1, LV_DIR_HOR);
     lv_obj_t *tile_alarm_volume = lv_tileview_add_tile(main_tileview, 3, 1, LV_DIR_HOR);
     lv_obj_t *tile_brightness = lv_tileview_add_tile(main_tileview, 4, 1, LV_DIR_HOR);
     lv_obj_t *tile_theme = lv_tileview_add_tile(main_tileview, 5, 1, LV_DIR_HOR);
     lv_obj_t *tile_clock_face = lv_tileview_add_tile(main_tileview, 6, 1, LV_DIR_HOR);
     lv_obj_t *tile_time = lv_tileview_add_tile(main_tileview, 7, 1, LV_DIR_HOR);
+    lv_obj_t *tile_notes = lv_tileview_add_tile(main_tileview, 8, 1, LV_DIR_HOR);
     lv_obj_t *tile_timer = lv_tileview_add_tile(main_tileview, 1, 0, LV_DIR_BOTTOM);
+    /* Swipe down from the clock (row 2) - the other primary, non-settings
+     * direction, mirroring the timer's swipe-up placement at row 0. */
+    lv_obj_t *tile_agent = lv_tileview_add_tile(main_tileview, 1, 2, LV_DIR_TOP);
     device_status_ui_screen_init(tile_device_status);
     clock_ui_screen_init(tile_clock);
     alarm_settings_ui_screen_init(tile_alarm);
@@ -77,7 +85,9 @@ void app_main(void)
     theme_settings_ui_screen_init(tile_theme);
     clock_face_settings_ui_screen_init(tile_clock_face);
     time_settings_ui_screen_init(tile_time);
+    notes_ui_screen_init(tile_notes);
     timer_ui_screen_init(tile_timer);
+    agent_ui_screen_init(tile_agent);
 
     /* Tile (0,1) is device status now that clock moved to row 1; start on
      * the clock instead of changing the tileview's default landing spot. */

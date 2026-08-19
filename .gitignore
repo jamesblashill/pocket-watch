@@ -20,3 +20,4 @@ CMakeFiles/
 
 # Local secrets
 main/app_net/wifi_credentials.h
+main/app_net/agent_credentials.h

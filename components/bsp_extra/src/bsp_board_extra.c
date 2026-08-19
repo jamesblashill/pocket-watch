@@ -18,6 +18,10 @@ static const char *TAG = "bsp_extra_board";
 static uint8_t Volume = 80;
 esp_asp_handle_t handle = NULL;
 esp_codec_dev_handle_t spk_codec_dev = NULL;
+/* Lazily created on first Audio_Capture_Open() - bsp_audio_codec_microphone_init()
+ * is otherwise unused today, unlike the speaker path which Audio_Play_Init()
+ * sets up eagerly at boot. */
+static esp_codec_dev_handle_t mic_codec_dev = NULL;
 
 /* Kept open only for the duration of a play - see Audio_Play_Music() /
  * Audio_Stop_Play() and the ESP_ASP_STATE_FINISHED case below. Opening the
@@ -162,4 +166,74 @@ void Audio_Play_Deinit(void)
     Audio_PA_DIS();
     ESP_ERROR_CHECK(gpio_reset_pin(GPIO_NUM_0));
     esp_audio_simple_player_destroy(handle);
+}
+
+/* --- Raw PCM16 mono streaming capture/playback, for the voice agent -----
+ * Distinct from the WAV/URL-based Audio_Play_Music() path above: these write
+ * and read live network-sourced frames directly against the codec devices,
+ * with no esp_audio_simple_player/esp_gmf pipeline in between. Same
+ * open-only-while-active/close-when-done discipline as the rest of this
+ * file, so the I2S channel isn't held awake outside an active session. */
+
+esp_err_t Audio_Capture_Open(uint32_t sample_rate)
+{
+    if (mic_codec_dev == NULL) {
+        mic_codec_dev = bsp_audio_codec_microphone_init();
+        if (mic_codec_dev == NULL) {
+            return ESP_FAIL;
+        }
+    }
+
+    esp_codec_dev_sample_info_t fs = {
+        .bits_per_sample = 16,
+        .channel = 1,
+        .sample_rate = sample_rate,
+    };
+    esp_err_t err = esp_codec_dev_open(mic_codec_dev, &fs);
+    if (err == ESP_OK) {
+        /* ES7210 hardware gain is set to 30dB by default (out of a 37.5dB
+         * ceiling) - push it to max, since captured audio has been coming
+         * through quiet. Gain can only be set while the device is open, so
+         * this has to happen here rather than at bsp_audio_codec_microphone_init(). */
+        esp_codec_dev_set_in_gain(mic_codec_dev, 37.5f);
+    }
+    return err;
+}
+
+esp_err_t Audio_Capture_Read(uint8_t *buf, size_t len)
+{
+    return esp_codec_dev_read(mic_codec_dev, buf, len);
+}
+
+void Audio_Capture_Close(void)
+{
+    if (mic_codec_dev != NULL) {
+        esp_codec_dev_close(mic_codec_dev);
+    }
+}
+
+esp_err_t Audio_Stream_Open(uint32_t sample_rate)
+{
+    Audio_PA_DIS();
+    esp_codec_dev_sample_info_t fs = {
+        .bits_per_sample = 16,
+        .channel = 1,
+        .sample_rate = sample_rate,
+    };
+    esp_err_t err = esp_codec_dev_open(spk_codec_dev, &fs);
+    if (err == ESP_OK) {
+        Audio_PA_EN();
+    }
+    return err;
+}
+
+esp_err_t Audio_Stream_Write(const uint8_t *buf, size_t len)
+{
+    return esp_codec_dev_write(spk_codec_dev, (void *)buf, len);
+}
+
+void Audio_Stream_Close(void)
+{
+    Audio_PA_DIS();
+    esp_codec_dev_close(spk_codec_dev);
 }

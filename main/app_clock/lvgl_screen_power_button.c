@@ -1,6 +1,7 @@
 #include "lvgl_screen_power_button.h"
 #include "app_alarm/alarm.h"
 #include "app_timer/timer.h"
+#include "app_agent/agent.h"
 #include "bsp/esp-bsp.h"
 #include "iot_button.h"
 #include "button_gpio.h"
@@ -189,7 +190,8 @@ static void idle_check_timer_cb(lv_timer_t *t)
 {
     LV_UNUSED(t);
 
-    if (!s_screen_on || app_alarm_is_ringing() || app_timer_is_ringing()) {
+    if (!s_screen_on || app_alarm_is_ringing() || app_timer_is_ringing() ||
+        app_agent_get_state() != AGENT_STATE_IDLE) {
         return;
     }
     if (lv_display_get_inactive_time(NULL) >= IDLE_TIMEOUT_MS) {
